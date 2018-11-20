@@ -33,15 +33,16 @@ import com.google.android.gms.tasks.OnSuccessListener;
 import java.util.ArrayList;
 import java.util.List;
 
+import io.realm.Realm;
+import io.realm.RealmResults;
 import kr.co.woobi.imyeon.dustinfo.common.AddLocationDialogFragment;
+import kr.co.woobi.imyeon.dustinfo.db.LocationRealmObject;
 import kr.co.woobi.imyeon.dustinfo.dust.FineDustContract;
 import kr.co.woobi.imyeon.dustinfo.dust.FineDustFragment;
 import kr.co.woobi.imyeon.dustinfo.util.GeoUtil;
 
 public class MainActivity extends AppCompatActivity
         implements NavigationView.OnNavigationItemSelectedListener {
-
-
 
 
     public static final int REQUEST_CODE_COARSE_PERMISSION = 1000;
@@ -52,13 +53,15 @@ public class MainActivity extends AppCompatActivity
     private List<Pair<Fragment, String>> mFragmentList;
 
     private FusedLocationProviderClient mFusedLocationClient;
-    //private Realm mRealm;
+    private Realm mRealm;
 
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
+
+        mRealm = Realm.getDefaultInstance();
 
         mFusedLocationClient = LocationServices.getFusedLocationProviderClient(this);
 
@@ -100,6 +103,22 @@ public class MainActivity extends AppCompatActivity
         setUpViewPager();
     }
 
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        mRealm.close();
+    }
+
+    public void saveNewCity(double lat, double lng, String city) {
+        mRealm.beginTransaction();
+        LocationRealmObject newLocatioReamObject = mRealm.createObject(LocationRealmObject.class);
+        newLocatioReamObject.setName(city);
+        newLocatioReamObject.setLat(lat);
+        newLocatioReamObject.setLng(lng);
+
+        mRealm.commitTransaction();
+    }
+
     private void addNewFragment(double lat, double lng, String city) {
         mFragmentList.add(new Pair<Fragment, String>(FineDustFragment.newInstance(lat, lng), city));
         mViewPager.getAdapter().notifyDataSetChanged();
@@ -131,12 +150,24 @@ public class MainActivity extends AppCompatActivity
         int id = item.getItemId();
 
         //noinspection SimplifiableIfStatement
-        if (id == R.id.action_settings) {
+        if (id == R.id.action_all_delete) {
+            mRealm.beginTransaction();
+            mRealm.where(LocationRealmObject.class).findAll().deleteAllFromRealm();
+            mRealm.commitTransaction();
+            setUpViewPager();
+            return true;
+        } else if (id == R.id.action_delete) {
+            if(mTabLayout.getSelectedTabPosition()-1<0){
+                Toast.makeText(this, "현재 위치 탭은 삭제할 수 없습니다.", Toast.LENGTH_SHORT).show();
+            }
+            mRealm.beginTransaction();
+            mRealm.where(LocationRealmObject.class).findAll().get(mTabLayout.getSelectedTabPosition()-1).deleteFromRealm();
+            mRealm.commitTransaction();
             return true;
         }
-
         return super.onOptionsItemSelected(item);
     }
+
 
     @SuppressWarnings("StatementWithEmptyBody")
     @Override
@@ -177,12 +208,18 @@ public class MainActivity extends AppCompatActivity
         mFragmentList.add(new Pair<Fragment, String>(
                 new FineDustFragment(), "현재 위치"
         ));
+        RealmResults<LocationRealmObject> realmResults = mRealm.where(LocationRealmObject.class).findAll();
+        for (LocationRealmObject realmObject : realmResults) {
+            mFragmentList.add(new Pair<Fragment, String>(
+                    new FineDustFragment().newInstance(realmObject.getLat(), realmObject.getLng()), realmObject.getName()
+            ));
+        }
     }
 
     public void getLastKnownLocation() {
         if (ActivityCompat.checkSelfPermission(this,
                 Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED && ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
-            ActivityCompat.requestPermissions(this, new String[] {Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION}, REQUEST_CODE_COARSE_PERMISSION);
+            ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION}, REQUEST_CODE_COARSE_PERMISSION);
             return;
         }
         mFusedLocationClient.getLastLocation().addOnSuccessListener(this, new OnSuccessListener<Location>() {
@@ -200,9 +237,9 @@ public class MainActivity extends AppCompatActivity
     @Override
     public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
-        if(requestCode == REQUEST_CODE_COARSE_PERMISSION){
-            if(grantResults.length > 0 && grantResults[0]==PackageManager.PERMISSION_GRANTED
-                    &&  grantResults[1] ==PackageManager.PERMISSION_GRANTED){
+        if (requestCode == REQUEST_CODE_COARSE_PERMISSION) {
+            if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED
+                    && grantResults[1] == PackageManager.PERMISSION_GRANTED) {
                 getLastKnownLocation();
             }
         }
