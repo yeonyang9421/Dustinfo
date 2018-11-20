@@ -163,6 +163,7 @@ public class MainActivity extends AppCompatActivity
             mRealm.beginTransaction();
             mRealm.where(LocationRealmObject.class).findAll().get(mTabLayout.getSelectedTabPosition()-1).deleteFromRealm();
             mRealm.commitTransaction();
+            setUpViewPager();
             return true;
         }
         return super.onOptionsItemSelected(item);

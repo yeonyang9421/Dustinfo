@@ -25,11 +25,12 @@ public class FineDustFragment extends Fragment implements FineDustContract.View 
     private SwipeRefreshLayout mSwipeRefreshLayout;
     private FineDustPressenter mPresenter;
     private FineDustRepository mRepository;
-    public static  FineDustFragment newInstance(double lat, double lng){
+
+    public static FineDustFragment newInstance(double lat, double lng) {
         Bundle args = new Bundle();
         args.putDouble("lat", lat);
         args.putDouble("lng", lng);
-        FineDustFragment fragment=new FineDustFragment();
+        FineDustFragment fragment = new FineDustFragment();
         fragment.setArguments(args);
         return fragment;
     }
@@ -37,15 +38,15 @@ public class FineDustFragment extends Fragment implements FineDustContract.View 
     @Override
     public void onActivityCreated(@Nullable Bundle savedInstanceState) {
         super.onActivityCreated(savedInstanceState);
-        if(getArguments() !=null){
+        if (getArguments() != null) {
             double lat = getArguments().getDouble("lat");
-            double lng= getArguments().getDouble("lng");
-            mRepository=new LocationFineDustRepository(lat, lng);
-        }else{
-            mRepository=new LocationFineDustRepository();
-            ((MainActivity)getActivity()).getLastKnownLocation();
+            double lng = getArguments().getDouble("lng");
+            mRepository = new LocationFineDustRepository(lat, lng);
+        } else {
+            mRepository = new LocationFineDustRepository();
+            ((MainActivity) getActivity()).getLastKnownLocation();
         }
-        mPresenter=new FineDustPressenter(mRepository, this);
+        mPresenter = new FineDustPressenter(mRepository, this);
         mPresenter.loadFinedustData();
     }
 
@@ -84,10 +85,18 @@ public class FineDustFragment extends Fragment implements FineDustContract.View 
 
     @Override
     public void showFineDustResult(FineDust fineDust) {
-        mLocationTextview.setText(fineDust.getWeather().getDust().get(0).getStation().getName());
-        mTimeTextView.setText(fineDust.getWeather().getDust().get(0).getTimeObservation());
-        mDustTextView.setText(fineDust.getWeather().getDust().get(0).getPm10().getValue() + " ㎍/m³,"
-                + fineDust.getWeather().getDust().get(0).getPm10().getGrade());
+
+        try {
+            mLocationTextview.setText(fineDust.getWeather().getDust().get(0).getStation().getName());
+            mTimeTextView.setText(fineDust.getWeather().getDust().get(0).getTimeObservation());
+            mDustTextView.setText(fineDust.getWeather().getDust().get(0).getPm10().getValue() + " ㎍/㎥, "
+                    + fineDust.getWeather().getDust().get(0).getPm10().getGrade());
+        } catch (Exception e) {
+            mLocationTextview.setText("일일 허용량 초과");
+            mTimeTextView.setText("일일 허용량 초과");
+            mDustTextView.setText("일일 허용량 초과");
+        }
+
 
     }
 
@@ -109,7 +118,9 @@ public class FineDustFragment extends Fragment implements FineDustContract.View 
     @Override
     public void reload(double lat, double lng) {
         mRepository = new LocationFineDustRepository(lat, lng);
-        mPresenter =new FineDustPressenter(mRepository, this);
+        mPresenter = new FineDustPressenter(mRepository, this);
         mPresenter.loadFinedustData();
     }
+
+
 }
