@@ -1,8 +1,20 @@
 package kr.co.woobi.imyeon.dustinfo;
 
+import android.Manifest;
+import android.content.pm.PackageManager;
+import android.location.Location;
 import android.os.Bundle;
+import android.support.annotation.NonNull;
+import android.support.annotation.Nullable;
 import android.support.design.widget.FloatingActionButton;
 import android.support.design.widget.Snackbar;
+import android.support.design.widget.TabLayout;
+import android.support.v4.app.ActivityCompat;
+import android.support.v4.app.Fragment;
+import android.support.v4.app.FragmentManager;
+import android.support.v4.app.FragmentStatePagerAdapter;
+import android.support.v4.view.ViewPager;
+import android.util.Pair;
 import android.view.View;
 import android.support.design.widget.NavigationView;
 import android.support.v4.view.GravityCompat;
@@ -12,14 +24,44 @@ import android.support.v7.app.AppCompatActivity;
 import android.support.v7.widget.Toolbar;
 import android.view.Menu;
 import android.view.MenuItem;
+import android.widget.Toast;
+
+import com.google.android.gms.location.FusedLocationProviderClient;
+import com.google.android.gms.location.LocationServices;
+import com.google.android.gms.tasks.OnSuccessListener;
+
+import java.util.ArrayList;
+import java.util.List;
+
+import kr.co.woobi.imyeon.dustinfo.common.AddLocationDialogFragment;
+import kr.co.woobi.imyeon.dustinfo.dust.FineDustContract;
+import kr.co.woobi.imyeon.dustinfo.dust.FineDustFragment;
+import kr.co.woobi.imyeon.dustinfo.util.GeoUtil;
 
 public class MainActivity extends AppCompatActivity
         implements NavigationView.OnNavigationItemSelectedListener {
+
+
+
+
+    public static final int REQUEST_CODE_COARSE_PERMISSION = 1000;
+
+    private Toolbar mToolbar;
+    private TabLayout mTabLayout;
+    private ViewPager mViewPager;
+    private List<Pair<Fragment, String>> mFragmentList;
+
+    private FusedLocationProviderClient mFusedLocationClient;
+    //private Realm mRealm;
+
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
+
+        mFusedLocationClient = LocationServices.getFusedLocationProviderClient(this);
+
         Toolbar toolbar = (Toolbar) findViewById(R.id.toolbar);
         setSupportActionBar(toolbar);
 
@@ -27,8 +69,22 @@ public class MainActivity extends AppCompatActivity
         fab.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-                Snackbar.make(view, "Replace with your own action", Snackbar.LENGTH_LONG)
-                        .setAction("Action", null).show();
+                AddLocationDialogFragment.newInstance(new AddLocationDialogFragment.OnClickListener() {
+                    @Override
+                    public void onOkClicked(final String city) {
+                        GeoUtil.getLocationFromName(MainActivity.this, city, new GeoUtil.GeoUtilListener() {
+                            @Override
+                            public void onSuccess(double lat, double lng) {
+                                addNewFragment(lat, lng, city);
+                            }
+
+                            @Override
+                            public void onError(String message) {
+                                Toast.makeText(MainActivity.this, message, Toast.LENGTH_SHORT).show();
+                            }
+                        });
+                    }
+                }).show(getSupportFragmentManager(), "dialog");
             }
         });
 
@@ -40,7 +96,15 @@ public class MainActivity extends AppCompatActivity
 
         NavigationView navigationView = (NavigationView) findViewById(R.id.nav_view);
         navigationView.setNavigationItemSelectedListener(this);
+
+        setUpViewPager();
     }
+
+    private void addNewFragment(double lat, double lng, String city) {
+        mFragmentList.add(new Pair<Fragment, String>(FineDustFragment.newInstance(lat, lng), city));
+        mViewPager.getAdapter().notifyDataSetChanged();
+    }
+
 
     @Override
     public void onBackPressed() {
@@ -98,4 +162,76 @@ public class MainActivity extends AppCompatActivity
         drawer.closeDrawer(GravityCompat.START);
         return true;
     }
+
+    private void setUpViewPager() {
+        mTabLayout = findViewById(R.id.tab_layout);
+        mViewPager = findViewById(R.id.view_pager);
+        loadDbData();
+        MyPagerAdapter adapter = new MyPagerAdapter(getSupportFragmentManager(), mFragmentList);
+        mViewPager.setAdapter(adapter);
+        mTabLayout.setupWithViewPager(mViewPager);
+    }
+
+    private void loadDbData() {
+        mFragmentList = new ArrayList<>();
+        mFragmentList.add(new Pair<Fragment, String>(
+                new FineDustFragment(), "현재 위치"
+        ));
+    }
+
+    public void getLastKnownLocation() {
+        if (ActivityCompat.checkSelfPermission(this,
+                Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED && ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+            ActivityCompat.requestPermissions(this, new String[] {Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION}, REQUEST_CODE_COARSE_PERMISSION);
+            return;
+        }
+        mFusedLocationClient.getLastLocation().addOnSuccessListener(this, new OnSuccessListener<Location>() {
+            @Override
+            public void onSuccess(Location location) {
+                if (location != null) {
+                    FineDustContract.View view = (FineDustContract.View) mFragmentList.get(0).first;
+                    view.reload(location.getLatitude(), location.getLongitude());
+
+                }
+            }
+        });
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if(requestCode == REQUEST_CODE_COARSE_PERMISSION){
+            if(grantResults.length > 0 && grantResults[0]==PackageManager.PERMISSION_GRANTED
+                    &&  grantResults[1] ==PackageManager.PERMISSION_GRANTED){
+                getLastKnownLocation();
+            }
+        }
+    }
+
+    private static class MyPagerAdapter extends FragmentStatePagerAdapter {
+        private final List<Pair<Fragment, String>> mFragmentList;
+
+
+        public MyPagerAdapter(FragmentManager fm, List<Pair<Fragment, String>> fragmentList) {
+            super(fm);
+            mFragmentList = fragmentList;
+        }
+
+        @Override
+        public Fragment getItem(int posiotion) {
+            return mFragmentList.get(posiotion).first;
+        }
+
+        @Override
+        public int getCount() {
+            return mFragmentList.size();
+        }
+
+        @Nullable
+        @Override
+        public CharSequence getPageTitle(int position) {
+            return mFragmentList.get(position).second;
+        }
+    }
 }
+

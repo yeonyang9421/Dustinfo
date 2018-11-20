@@ -12,6 +12,7 @@ import android.view.ViewGroup;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import kr.co.woobi.imyeon.dustinfo.MainActivity;
 import kr.co.woobi.imyeon.dustinfo.R;
 import kr.co.woobi.imyeon.dustinfo.data.FineDustRepository;
 import kr.co.woobi.imyeon.dustinfo.data.LocationFineDustRepository;
@@ -42,7 +43,7 @@ public class FineDustFragment extends Fragment implements FineDustContract.View 
             mRepository=new LocationFineDustRepository(lat, lng);
         }else{
             mRepository=new LocationFineDustRepository();
-
+            ((MainActivity)getActivity()).getLastKnownLocation();
         }
         mPresenter=new FineDustPressenter(mRepository, this);
         mPresenter.loadFinedustData();
